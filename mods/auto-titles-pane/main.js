@@ -5,6 +5,7 @@
 // this pane. Props from the app: { pane, terminal }. Click: focus the pane.
 
 import { paneTitle } from './titles.js';
+import { fileAppearance } from './appearance.js';
 import { View, div, svg, image } from 'gpui-kit';
 import { h_flex } from 'gpui-base';
 import { panes, props, run, theme, home, shared, setShared } from 'herdr';
@@ -51,7 +52,15 @@ export default class Pane extends View {
 		const p = this.me();
 		if (!p) return div();
 		const name = paneTitle(p, shared('auto-titles.cmd'));
-		const pic = icon(p.program, 14, t.dim);
+		// An editor pane shows its file's icon (the Files tab's). The file is the one its tab reports: a split
+		// editor has no way to say which file it holds, so it shows the tab's.
+		const file = p.mod === 'file-editor' ? shared('file-editor')?.[p.tab]?.path : null;
+		const pic = file
+			? image(`mods/file-changes-colors/icons/${fileAppearance(file).icon}.svg`)
+					.w(14)
+					.h(14)
+					.flex_none()
+			: icon(p.program, 14, t.dim);
 		const st = p.status;
 		const pane = p.pane;
 		return h_flex()
