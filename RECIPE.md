@@ -25,8 +25,8 @@ the sidebar is `chrome`. Terminal padding is 14 px vertical, 12 px horizontal.
    `border` outline, `background` fill, 8 px between cards, `accent` outline when focused; a lone
    pane is framed too. Each card has a 30 px header, always shown: program icon, agent name or
    terminal title, folder, agent status, buttons for split, zoom and close. An editor pane shows
-   its file's icon (14 px, the Files one) where a terminal shows the program's, with the title
-   `file-editor`.
+   its file's icon (14 px, the Files one) where a terminal shows the program's, and the file's
+   name (`package.json`) as its title.
 3. **Status bar**, 28 px. Left: the machine ("This computer"), the branch with ahead/behind arrows
    and change counts (`M 1`, `A 1`, ...), and "N agents". Right: with an editor tab shown, the file
    name, language, problems (`✕ 2` errors in `blocked`, `⚠ 1` warnings in `ansi3`, only when there
@@ -147,7 +147,7 @@ Mods (all in `mods/`, each `place: "none"`; clones record `cloned_from`):
 | Mod | Role |
 |---|---|
 | `auto-titles-tabs` | tab strip (an editor tab's icon comes from `appearance.js`, a copy of the Files mapping, and the SVGs in `mods/file-changes-colors/icons/`, so that mod must be installed; the path is read from shared `file-editor`); key commands `zed`, `spaces`, `files`, `changes`; every 3 s reads recent terminal text with `hc read` for the `• command` label (shared `auto-titles.cmd`) |
-| `auto-titles-pane` | pane header (an editor pane's icon comes from its own copy of `appearance.js` and `mods/file-changes-colors/icons/`; a split editor shows its tab's file, since a pane can't tell which file it holds); its close button asks the editor first (`file-editor.request`) when text is unsaved |
+| `auto-titles-pane` | pane header (an editor pane's icon comes from its own copy of `appearance.js` and `mods/file-changes-colors/icons/`; a split editor shows its tab's file, since a pane can't tell which file it holds; the same file gives the header its title); its close button asks the editor first (`file-editor.request`) when text is unsaved |
 | `auto-titles-workspace-chrome` | brand row, Spaces/Files/Changes switcher, footer; one mod, props pick the part |
 | `auto-titles-agents` | agents list; opens `auto-titles-peek` |
 | `auto-titles-menu`, `auto-titles-new-menu`, `auto-titles-peek`, `auto-titles-picker` | context menus, the `+` menu, the peek bar, ⌘P go-to-tab; menus open the shipped `worktree` dialog |
@@ -248,7 +248,7 @@ project or machine has them, `node_modules/.bin/eslint`, `node_modules/.bin/pret
     (any case), shows `Replaced N in M files`, and an editor open on one of them reloads.
 17. A tab holding `app.js` shows the JavaScript icon, `data.json` the JSON icon, `main.py` the
     Python icon, the same as those names in Files; the pane header of that editor shows the same
-    icon.
+    icon and the file name as its title.
 18. Opening a file adds it to the list under an empty search field; `Split` shows the same file
     twice side by side with a single `Split` button.
 19. A window with a `demo` space shows what `preview.png` shows: Files in the sidebar, an editor

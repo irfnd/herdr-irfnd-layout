@@ -51,10 +51,10 @@ export default class Pane extends View {
 		const t = theme();
 		const p = this.me();
 		if (!p) return div();
-		const name = paneTitle(p, shared('auto-titles.cmd'));
-		// An editor pane shows its file's icon (the Files tab's). The file is the one its tab reports: a split
-		// editor has no way to say which file it holds, so it shows the tab's.
+		// An editor pane shows its file's name and icon (the Files tab's). The file is the one its tab reports:
+		// a split editor has no way to say which file it holds, so it shows the tab's.
 		const file = p.mod === 'file-editor' ? shared('file-editor')?.[p.tab]?.path : null;
+		const name = file ? file.split('/').pop() : paneTitle(p, shared('auto-titles.cmd'));
 		const pic = file
 			? image(`mods/file-changes-colors/icons/${fileAppearance(file).icon}.svg`)
 					.w(14)
