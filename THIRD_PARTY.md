@@ -1,5 +1,7 @@
 # Third-party code and assets
 
+The repository's own code is MIT (see `LICENSE`). The parts below keep the licenses of their authors.
+
 This layout is built on other people's work. Each file that uses it says so in its own header;
 this is the list.
 
