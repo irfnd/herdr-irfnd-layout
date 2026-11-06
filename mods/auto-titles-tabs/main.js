@@ -1,4 +1,5 @@
 import { tabTitle, titleSnapshot } from './titles.js';
+import { fileAppearance } from './appearance.js';
 import { View, div, svg, image } from 'gpui-kit';
 import { h_flex } from 'gpui-base';
 import {
@@ -215,6 +216,9 @@ export default class Tabs extends View {
 			const program =
 				panes().find((p) => p.tab === c.id && p.program?.agent)?.program ?? panes().find((p) => p.tab === c.id)?.program;
 			const name = tabTitle(c, panes(), shared('auto-titles.cmd'));
+			// An editor tab shows its file's icon, the one the Files tab uses. (A stale entry of a tab that
+			// is no longer an editor must not count, so the tab has to hold a file-editor pane.)
+			const file = panes().some((p) => p.tab === c.id && p.mod === 'file-editor') ? shared('file-editor')?.[c.id]?.path : null;
 			return h_flex()
 				.id(`tab-${c.id}`)
 				.h(29)
@@ -249,7 +253,14 @@ export default class Tabs extends View {
 						props: { tab: 'tab', target: { id: c.id, space: space.id } },
 					}),
 				)
-				.when(Boolean(program?.icon), (el) =>
+				.when(Boolean(file), (el) =>
+					el.child(
+						image(`mods/file-changes-colors/icons/${fileAppearance(file).icon}.svg`)
+							.size(14)
+							.flex_none(),
+					),
+				)
+				.when(!file && Boolean(program?.icon), (el) =>
 					el.child(program.tint ? svg(program.icon).size(14).text_color(t.muted) : image(program.icon).size(14)),
 				)
 				.child(

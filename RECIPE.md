@@ -18,7 +18,8 @@ the sidebar is `chrome`. Terminal padding is 14 px vertical, 12 px horizontal.
 **Work column**, top to bottom:
 1. **Tab strip**, 42 px. Dragging it moves the window. One pill per tab of the shown space: the
    program's icon, the title, and an ✕ on the active pill. A terminal pill reads
-   `<program> • <last command>`. A `+` on the right opens the new-tab menu (a terminal, installed
+   `<program> • <last command>`. An editor tab shows its file's icon instead (the same Charmed icon
+   the Files tree uses, 14 px; an unknown extension gets the plain file icon). A `+` on the right opens the new-tab menu (a terminal, installed
    agents, New space, New/Open worktree, Open with Zed). A tab with unsaved text is titled `● name`.
 2. **Work area**, padding 8 px: the active tab's panes. Each pane is a card: radius 10, 1 px
    `border` outline, `background` fill, 8 px between cards, `accent` outline when focused; a lone
@@ -143,7 +144,7 @@ Mods (all in `mods/`, each `place: "none"`; clones record `cloned_from`):
 
 | Mod | Role |
 |---|---|
-| `auto-titles-tabs` | tab strip; key commands `zed`, `spaces`, `files`, `changes`; every 3 s reads recent terminal text with `hc read` for the `• command` label (shared `auto-titles.cmd`) |
+| `auto-titles-tabs` | tab strip (an editor tab's icon comes from `appearance.js`, a copy of the Files mapping, and the SVGs in `mods/file-changes-colors/icons/`, so that mod must be installed; the path is read from shared `file-editor`); key commands `zed`, `spaces`, `files`, `changes`; every 3 s reads recent terminal text with `hc read` for the `• command` label (shared `auto-titles.cmd`) |
 | `auto-titles-pane` | pane header; its close button asks the editor first (`file-editor.request`) when text is unsaved |
 | `auto-titles-workspace-chrome` | brand row, Spaces/Files/Changes switcher, footer; one mod, props pick the part |
 | `auto-titles-agents` | agents list; opens `auto-titles-peek` |
@@ -243,7 +244,9 @@ project or machine has them, `node_modules/.bin/eslint`, `node_modules/.bin/pret
     three selected rows opens one dialog titled `Delete 3 items?`.
 16. In Files search, `foo` with Replace `bar` and Replace all rewrites every file containing `foo`
     (any case), shows `Replaced N in M files`, and an editor open on one of them reloads.
-17. Opening a file adds it to the list under an empty search field; `Split` shows the same file
+17. A tab holding `app.js` shows the JavaScript icon, `data.json` the JSON icon, `main.py` the
+    Python icon, the same as those names in Files.
+18. Opening a file adds it to the list under an empty search field; `Split` shows the same file
     twice side by side with a single `Split` button.
-18. A window with a `demo` space shows what `preview.png` shows: Files in the sidebar, an editor
+19. A window with a `demo` space shows what `preview.png` shows: Files in the sidebar, an editor
     tab on `src/app.js`, `M 1  A 1` in the status bar.
