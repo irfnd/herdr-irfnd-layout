@@ -185,6 +185,13 @@ export default class StatusBar extends View {
 				)
 				.child(sep())
 				.child(file.language)
+				.when(file.errors + file.warnings > 0, (el) =>
+					el.child(
+						h_flex()
+							.gap(8)
+							.children([count(file.errors, '✕ ', t.blocked), count(file.warnings, '⚠ ', t.ansi3)].filter(Boolean)),
+					),
+				)
 				.when(cfg.statusCounts && file.lines !== undefined, (el) =>
 					el.child(sep()).child(`${file.lines} lines`).child(`${file.chars} chars`).child(`${file.words} words`),
 				)

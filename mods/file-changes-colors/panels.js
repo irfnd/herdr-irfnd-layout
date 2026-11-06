@@ -4,6 +4,9 @@
 //   { view: 'delete', path, dir, on }
 import { div, svg } from 'gpui-kit';
 import { v_flex, h_flex, InputState, Input } from 'gpui-base';
+import { home } from 'herdr';
+import { searchFiles } from './search.js';
+import { replaceAll } from './replace.js';
 import { props, closeOverlay, openOverlay, theme, setShared, notify } from 'herdr';
 import {
 	base,
@@ -27,25 +30,54 @@ const refresh = () => setShared('files.refresh', Date.now());
 const ico = (name) => `mods/${MOD}/ui/${name}.svg`;
 const folderOf = (p) => (p.dir ? p.path : parent(p.path));
 
-// Paste into `dir`: a copy keeps the original, a cut moves it (and is spent).
+// Runs `fn` on every path; one that fails does not stop the rest. -> [{ path, why }] of the failures.
+async function each(paths, fn) {
+	const failed = [];
+	for (const path of paths) {
+		try {
+			await fn(path);
+		} catch (e) {
+			failed.push({ path, why: String(e.message ?? e) });
+		}
+	}
+	return failed;
+}
+const names = (failed) => failed.map((f) => `${base(f.path)}: ${f.why}`).join('\n');
+
+// Paste into `dir`: a copy keeps the originals, a cut moves them. What a cut could not move stays on
+// the clipboard, so it can be pasted somewhere else.
 export async function paste(dir, on) {
-	const c = clipboard();
-	if (!c || c.on !== on) throw new Error('Nothing to paste on this machine');
-	try {
-		await (c.mode === 'cut' ? move : copy)(c.path, dir, on);
-		if (c.mode === 'cut') setShared('files.clipboard', null);
-	} catch (e) {
-		// The clipboard stays, so it can be pasted somewhere else.
+	const c = clipboard(),
+		paths = c?.paths ?? (c?.path ? [c.path] : []);
+	if (!paths.length || c.on !== on) throw new Error('Nothing to paste on this machine');
+	const verb = c.mode === 'cut' ? 'move' : 'copy';
+	const failed = await each(paths, (p) => (c.mode === 'cut' ? move : copy)(p, dir, on));
+	if (c.mode === 'cut') setShared('files.clipboard', failed.length ? { ...c, paths: failed.map((f) => f.path) } : null);
+	if (failed.length)
 		notify({
-			title: `Could not ${c.mode === 'cut' ? 'move' : 'copy'} ${base(c.path)}`,
-			body: String(e.message ?? e),
+			title: `Could not ${verb} ${failed.length === 1 ? base(failed[0].path) : `${failed.length} of ${paths.length} items`}`,
+			body: failed.length === 1 ? failed[0].why : names(failed),
 			level: 'error',
 		});
-	}
 	refresh();
 }
 
 function items(p) {
+	if (p.items?.length > 1) {
+		const n = `${p.items.length} items`,
+			take = (mode) => () => setShared('files.clipboard', { mode, paths: p.items.map((i) => i.path), on: p.on });
+		return [
+			[`Copy ${n}`, 'copy', take('copy')],
+			[`Cut ${n}`, 'scissors', take('cut')],
+			[
+				`Delete ${n}…`,
+				'trash',
+				() => openOverlay({ mod: MOD, kind: 'dialog', width: 400, props: { view: 'delete', on: p.on, items: p.items } }),
+				false,
+				true,
+			],
+		];
+	}
 	const root = !p.path,
 		c = clipboard(),
 		there = root ? p.root : p.dir ? p.path : parent(p.path);
@@ -57,13 +89,13 @@ function items(p) {
 		...(root
 			? []
 			: [
-					['Copy', 'copy', () => setShared('files.clipboard', { mode: 'copy', path: p.path, on: p.on })],
-					['Cut', 'scissors', () => setShared('files.clipboard', { mode: 'cut', path: p.path, on: p.on })],
+					['Copy', 'copy', () => setShared('files.clipboard', { mode: 'copy', paths: [p.path], on: p.on })],
+					['Cut', 'scissors', () => setShared('files.clipboard', { mode: 'cut', paths: [p.path], on: p.on })],
 				]),
 		['Paste', 'clipboard', () => paste(there, p.on).catch(() => {}), !c || c.on !== p.on],
 		...(root ? [] : [['Copy path', 'link', () => copyPath(p.path)]]),
 		...(p.on ? [] : [['Reveal in Finder', 'external', () => reveal(p.path ?? p.root)]]),
-		...(root ? [] : [['Delete…', 'trash', () => dialog('delete', { path: p.path, dir: p.dir }), false, true]]),
+		...(root ? [] : [['Delete…', 'trash', () => dialog('delete', { items: [{ path: p.path, dir: p.dir }] }), false, true]]),
 	];
 
 	function dialog(view, extra) {
@@ -270,6 +302,7 @@ export class NameDialog {
 
 export class DeleteDialog {
 	init(_p, cx) {
+		this.items = [...props().items]; // shrinks to what could not be deleted
 		this.error = null;
 		this.busy = false;
 		this.handle = cx.focus_handle();
@@ -281,33 +314,57 @@ export class DeleteDialog {
 		if (this.busy) return;
 		this.busy = true;
 		cx.spawn(async (cx) => {
-			try {
-				await remove(p.path, p.on);
-				refresh();
-				closeOverlay(p.overlay);
-			} catch (e) {
-				this.error = String(e.message ?? e);
-				this.busy = false;
-				cx.notify();
-			}
+			const failed = await each(
+				this.items.map((i) => i.path),
+				(path) => remove(path, p.on),
+			);
+			refresh();
+			if (!failed.length) return closeOverlay(p.overlay);
+			// What was deleted is gone; the dialog stays for what was not.
+			const left = new Set(failed.map((f) => f.path));
+			this.items = this.items.filter((i) => left.has(i.path));
+			this.error = names(failed);
+			this.busy = false;
+			cx.notify();
 		});
 	}
 
 	render() {
 		const t = theme(),
-			p = props();
+			p = props(),
+			items = this.items,
+			one = items.length === 1,
+			folders = items.filter((i) => i.dir).length;
+		const what = one
+			? items[0].dir
+				? 'The folder and everything in it'
+				: 'The file'
+			: `${items.length} items${folders ? `, ${folders === 1 ? 'a folder' : `${folders} folders`} and everything in ${folders === 1 ? 'it' : 'them'},` : ''}`;
 		return frame(
 			t,
-			`Delete ${base(p.path)}?`,
+			one ? `Delete ${base(items[0].path)}?` : `Delete ${items.length} items?`,
 			this.handle,
 			escape,
 			div()
 				.text_color(t.muted)
 				.child(
 					trashes(p.on)
-						? `${p.dir ? 'The folder and everything in it' : 'The file'} moves to the Trash.`
-						: `${p.dir ? 'The folder and everything in it' : 'The file'} is deleted for good. This cannot be undone.`,
+						? `${what} ${one ? 'moves' : 'move'} to the Trash.`
+						: `${what} ${one ? 'is' : 'are'} deleted for good. This cannot be undone.`,
 				),
+			...(one
+				? []
+				: [
+						div()
+							.text_size(11.5)
+							.text_color(t.dim)
+							.child(
+								items
+									.slice(0, 5)
+									.map((i) => base(i.path))
+									.join(', ') + (items.length > 5 ? `, and ${items.length - 5} more` : ''),
+							),
+					]),
 			...(this.error ? [div().text_size(11.5).text_color(t.blocked).child(this.error)] : []),
 			buttons(
 				t,
@@ -316,6 +373,81 @@ export class DeleteDialog {
 				'Delete',
 				true,
 				!this.busy,
+			),
+		);
+	}
+}
+
+// Replace `query` with `replacement` in every file that has it. The list is read when the dialog opens.
+export class ReplaceDialog {
+	init(_p, cx) {
+		this.files = null; // [relative path] with a match, once found
+		this.error = null;
+		this.busy = false;
+		this.handle = cx.focus_handle();
+		this.handle.focus();
+		const p = props();
+		cx.spawn(async (cx) => {
+			this.files = await searchFiles(p.root, p.query, home(), p.on).catch((e) => {
+				this.error = String(e.message ?? e);
+				return [];
+			});
+			cx.notify();
+		});
+	}
+
+	run(cx) {
+		const p = props();
+		if (this.busy || !this.files?.length) return;
+		this.busy = true;
+		cx.spawn(async (cx) => {
+			const r = await replaceAll(p.root, this.files, p.query, p.replacement);
+			refresh();
+			setShared('git.changed', Date.now());
+			notify({
+				title: `Replaced ${r.occurrences} in ${r.files} file${r.files === 1 ? '' : 's'}`,
+				body: r.failed.length ? `${r.failed.length} could not be changed: ${names(r.failed)}` : undefined,
+				level: r.failed.length ? 'warning' : 'success',
+				timeout: r.failed.length ? 8000 : 4000,
+			});
+			closeOverlay(p.overlay);
+		});
+	}
+
+	render() {
+		const t = theme(),
+			p = props(),
+			n = this.files?.length ?? 0;
+		return frame(
+			t,
+			`Replace “${p.query}”${p.replacement ? ` with “${p.replacement}”` : ' with nothing'}?`,
+			this.handle,
+			escape,
+			div()
+				.text_color(t.muted)
+				.child(
+					this.files === null
+						? 'Looking for matches…'
+						: n === 0
+							? 'No files contain it.'
+							: `Every match in ${n} file${n === 1 ? '' : 's'} will change, ignoring case. This writes to the files and cannot be undone here; git can.`,
+				),
+			...(n
+				? [
+						div()
+							.text_size(11.5)
+							.text_color(t.dim)
+							.child(this.files.slice(0, 6).join(', ') + (n > 6 ? `, and ${n - 6} more` : '')),
+					]
+				: []),
+			...(this.error ? [div().text_size(11.5).text_color(t.blocked).child(this.error)] : []),
+			buttons(
+				t,
+				(_e, cx) => this.run(cx),
+				() => closeOverlay(p.overlay),
+				'Replace',
+				true,
+				!this.busy && n > 0,
 			),
 		);
 	}

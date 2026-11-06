@@ -2,10 +2,23 @@
 import { View, div, svg, image } from 'gpui-kit';
 import { fileAppearance, folderAppearance, gitStatus, statusColor } from './appearance.js';
 import { v_flex, h_flex, InputState, Input } from 'gpui-base';
-import { spaces, panes, focused, exec, shared, setShared, openOverlay, props, watchFolder, theme, window, home } from 'herdr';
+import {
+	spaces,
+	panes,
+	focused,
+	exec,
+	shared,
+	setShared,
+	openOverlay,
+	props,
+	watchFolder,
+	theme,
+	window,
+	home as homeDir,
+} from 'herdr';
 import { searchNames, searchContent } from './search.js';
 import { openFile, parent, clipboard } from './ops.js';
-import { FileMenu, NameDialog, DeleteDialog, paste } from './panels.js';
+import { FileMenu, NameDialog, DeleteDialog, ReplaceDialog, paste } from './panels.js';
 
 // A mod pane (an editor tab) has no folder, and `space.folder` is only where the space was made. So a space
 // keeps showing the folder of the last terminal that had focus in it, else of its first terminal.
@@ -56,12 +69,18 @@ async function directory(path, on) {
 class Files extends View {
 	init(_props, cx) {
 		this.handle = cx.focus_handle();
-		this.selected = null; // { path (relative), dir }
+		this.selected = null; // { path (relative), dir }: the item last clicked
+		this.sel = new Map(); // every selected path (relative) -> dir; cmd/ctrl-click adds, shift-click takes a range
+		this.anchor = null; // where a shift-click range starts
+		this.order = []; // [path, dir] of the rows on screen, top to bottom
 		this.searching = false; // the search field is open
 		this.found = null; // { names: [path], hits: [{ path, line, text }] } for the current query
 		this.query = '';
 		this.input = InputState.new({ placeholder: 'Search files and text' });
 		this.input.on('change', (_e, cx) => this.find(this.input.value(), cx));
+		this.replacing = false; // the "replace with" field is open
+		this.repl = InputState.new({ placeholder: 'Replace with' });
+		this.repl.on('submit', () => this.askReplace());
 		this.seen = shared('files.refresh') ?? null;
 		this.entries = new Map();
 		this.folders = new Set();
@@ -77,6 +96,7 @@ class Files extends View {
 			if (n !== this.seen) {
 				this.seen = n;
 				this.refresh(cx);
+				if (this.searching && this.query) this.find(this.query, cx); // what a replace changed
 			}
 		});
 	}
@@ -125,6 +145,8 @@ class Files extends View {
 			this.marks = {};
 			this.dirs = {};
 			this.untracked = new Set();
+			this.sel = new Map();
+			this.anchor = null;
 			this.watched = null;
 			this.error = null;
 			this.limited = false;
@@ -209,6 +231,43 @@ class Files extends View {
 		cx.notify();
 	}
 
+	// What an operation acts on: the selection (a single click selects one), as absolute paths.
+	picked() {
+		const list = this.sel.size ? [...this.sel] : this.selected ? [[this.selected.path, this.selected.dir]] : [];
+		return list.map(([path, dir]) => ({ path: `${this.root}/${path}`, dir }));
+	}
+
+	// A click on a row. Plain: select it and open it (a folder folds). Cmd/Ctrl: add or remove it.
+	// Shift: everything from the last plain or cmd click down to it. The last two only select.
+	click(path, dir, mod, cx) {
+		this.handle.focus();
+		const at = this.order.findIndex(([p]) => p === path),
+			from = this.order.findIndex(([p]) => p === this.anchor);
+		if (mod.shift && at >= 0 && from >= 0) {
+			this.sel = new Map(this.order.slice(Math.min(at, from), Math.max(at, from) + 1));
+			this.selected = { path, dir };
+		} else if (mod.platform || mod.control) {
+			if (!this.sel.size && this.selected) this.sel.set(this.selected.path, this.selected.dir);
+			if (this.sel.has(path)) this.sel.delete(path);
+			else this.sel.set(path, dir);
+			const [last] = [...this.sel].slice(-1);
+			this.selected = last ? { path: last[0], dir: last[1] } : null;
+			this.anchor = path;
+		} else {
+			this.sel = new Map([[path, dir]]);
+			this.selected = { path, dir };
+			this.anchor = path;
+			if (dir) this.toggle(path, cx);
+			else openFile(`${this.root}/${path}`, this.on);
+		}
+		cx.notify();
+	}
+
+	clearSelection(cx) {
+		this.sel = this.selected ? new Map([[this.selected.path, this.selected.dir]]) : new Map();
+		cx.notify();
+	}
+
 	// The folder a new item goes into: the selected folder, else the selected item's folder, else the root.
 	target() {
 		const at = this.selected;
@@ -232,11 +291,17 @@ class Files extends View {
 			const q = this.query;
 			const [names, hits] = await Promise.all([
 				searchNames(root, q, on).catch(() => []),
-				((shared('editor.settings') ?? {}).contentSearch ?? true) ? searchContent(root, q, home(), on).catch(() => []) : [],
+				((shared('editor.settings') ?? {}).contentSearch ?? true) ? searchContent(root, q, homeDir(), on).catch(() => []) : [],
 			]);
 			if (stamp === this.stamp) this.found = { names, hits, q };
 			cx.notify();
 		});
+	}
+
+	// Replace-all asks first: a dialog counts the files and does it on Replace.
+	askReplace() {
+		if (!this.query || this.on) return;
+		this.dialog('replace', { root: this.root, query: this.query, replacement: this.repl.value() });
 	}
 
 	toggleSearch(cx) {
@@ -245,11 +310,59 @@ class Files extends View {
 		this.query = '';
 		this.stamp = (this.stamp ?? 0) + 1;
 		this.input.set_value('');
+		this.replacing = false;
+		this.repl.set_value('');
 		if (this.searching) {
 			this.input.focus();
 			cx.timer.after(300, () => this.input.focus());
 		}
 		cx.notify();
+	}
+
+	// A folder as the list shows it: relative to this one when inside it, else with ~ for home.
+	near(dir, home) {
+		if (dir === this.root) return '.';
+		return dir.startsWith(`${this.root}/`) ? dir.slice(this.root.length + 1) : dir.replace(home ?? '\0', '~');
+	}
+
+	// With nothing typed yet: the files opened lately, here or on this machine.
+	recent(t) {
+		const home = homeDir(),
+			list = (shared('files.recent') ?? []).filter((r) => (r.on ?? null) === (this.on ?? null));
+		const hint = div().p(8).text_size(12).text_color(t.dim).child('Type to search file names and text');
+		if (!list.length) return [hint];
+		return [
+			div().px(8).pt(8).pb(4).text_size(11).text_color(t.dim).child('Recent'),
+			...list.map((r, i) =>
+				h_flex()
+					.id(`recent-${i}`)
+					.h(28)
+					.flex_none()
+					.px(8)
+					.gap(7)
+					.items_center()
+					.rounded(7)
+					.cursor_pointer()
+					.hover((s) => s.bg(t.hover))
+					.on_click(() => openFile(r.path, r.on ?? null))
+					.child(
+						image(`mods/file-changes-colors/icons/${fileAppearance(r.path.split('/').pop()).icon}.svg`)
+							.size(16)
+							.flex_none(),
+					)
+					.child(div().truncate().child(r.path.split('/').pop()))
+					.child(
+						div()
+							.flex_1()
+							.min_w(0)
+							.truncate()
+							.text_size(11)
+							.text_color(t.dim)
+							.child(this.near(parent(r.path), home)),
+					),
+			),
+			hint,
+		];
 	}
 
 	results(t) {
@@ -292,7 +405,7 @@ class Files extends View {
 						)
 						.when(Boolean(extra), (el) => el.child(div().truncate().text_size(11.5).text_color(t.muted).child(extra))),
 				);
-		if (!this.query) return [div().p(8).text_size(12).text_color(t.dim).child('Type to search file names and text')];
+		if (!this.query) return this.recent(t);
 		if (!f) return [div().p(8).text_size(12).text_color(t.dim).child('Searching…')];
 		if (!f.names.length && !f.hits.length) return [div().p(8).text_size(12).text_color(t.dim).child(`No results for “${f.q}”`)];
 		return [
@@ -304,13 +417,21 @@ class Files extends View {
 	}
 
 	menu(path, dir) {
-		const n = path ? (dir ? 9 : 10) : 4;
+		const many = this.sel.size > 1;
+		const n = many ? 4 : path ? (dir ? 9 : 10) : 4;
 		openOverlay({
 			mod: 'file-changes-colors',
 			kind: 'popup',
 			width: 210,
-			height: 10 + (n - (this.on ? 1 : 0)) * 30 + (path ? 5 : 0),
-			props: { view: 'menu', path: path ? `${this.root}/${path}` : null, dir: path ? dir : true, root: this.root, on: this.on },
+			height: 10 + (n - (this.on || many ? 1 : 0)) * 30 + (path ? 5 : 0),
+			props: {
+				view: 'menu',
+				path: path ? `${this.root}/${path}` : null,
+				dir: path ? dir : true,
+				root: this.root,
+				on: this.on,
+				...(many ? { items: this.picked() } : {}),
+			},
 		});
 	}
 
@@ -336,17 +457,29 @@ class Files extends View {
 
 	key(e, cx) {
 		const at = this.selected,
-			abs = at && `${this.root}/${at.path}`;
+			abs = at && `${this.root}/${at.path}`,
+			list = this.picked(),
+			take = (mode) => setShared('files.clipboard', { mode, paths: list.map((i) => i.path), on: this.on });
 		if (e.keystroke === 'cmd-f') this.toggleSearch(cx);
-		else if (e.keystroke === 'f2' && at) this.dialog('name', { action: 'rename', path: abs });
-		else if ((e.keystroke === 'delete' || e.keystroke === 'cmd-backspace') && at)
-			this.dialog('delete', { path: abs, dir: at.dir });
-		else if (e.keystroke === 'cmd-c' && at) setShared('files.clipboard', { mode: 'copy', path: abs, on: this.on });
-		else if (e.keystroke === 'cmd-x' && at) setShared('files.clipboard', { mode: 'cut', path: abs, on: this.on });
+		else if (e.keystroke === 'f2' && at && this.sel.size <= 1) this.dialog('name', { action: 'rename', path: abs });
+		else if ((e.keystroke === 'delete' || e.keystroke === 'cmd-backspace') && list.length) this.dialog('delete', { items: list });
+		else if (e.keystroke === 'cmd-c' && list.length) take('copy');
+		else if (e.keystroke === 'cmd-x' && list.length) take('cut');
 		else if (e.keystroke === 'cmd-v' && clipboard()) paste(this.target(), this.on).catch(() => {});
+		else if (e.keystroke === 'cmd-a' && !this.searching) this.sel = new Map(this.order);
+		else if (e.key === 'escape' && this.sel.size > 1) this.clearSelection(cx);
 		else return;
 		cx.stop_propagation();
 		cx.notify();
+	}
+
+	// The rows, and what they leave of the selection: a folded-away or deleted item is not selected any more.
+	tree(t) {
+		this.order = [];
+		const out = this.rows('', 0, [], t);
+		const shown = new Set(this.order.map(([p]) => p));
+		for (const p of [...this.sel.keys()]) if (!shown.has(p)) this.sel.delete(p);
+		return out;
 	}
 
 	rows(prefix, depth, out, t) {
@@ -365,6 +498,7 @@ class Files extends View {
 				if (this.untracked.has(at)) mark = 'A';
 			}
 			const shade = mark ?? (entry.dir ? this.dirs[abs] : undefined);
+			this.order.push([path, entry.dir]);
 			out.push(
 				h_flex()
 					.id(`file-${path}`)
@@ -377,16 +511,14 @@ class Files extends View {
 					.rounded(7)
 					.cursor_pointer()
 					.hover((s) => s.bg(t.hover))
-					.when(this.selected?.path === path, (el) => el.bg(t.selected))
-					.on_click((_e, cx) => {
-						this.selected = { path, dir: entry.dir };
-						this.handle.focus();
-						if (entry.dir) this.toggle(path, cx);
-						else openFile(abs, this.on);
-						cx.notify();
-					})
+					.when(this.sel.has(path) || (!this.sel.size && this.selected?.path === path), (el) => el.bg(t.selected))
+					.on_click((e, cx) => this.click(path, entry.dir, e.modifiers, cx))
 					.on_mouse_down('right', (_e, cx) => {
 						cx.stop_propagation();
+						if (!this.sel.has(path)) {
+							this.sel = new Map([[path, entry.dir]]);
+							this.anchor = path;
+						}
 						this.selected = { path, dir: entry.dir };
 						this.menu(path, entry.dir);
 						cx.notify();
@@ -479,6 +611,77 @@ class Files extends View {
 								.bg(t.background)
 								.text_size(12.5)
 								.text_color(t.foreground),
+						)
+						.when(!this.on, (el) =>
+							el.child(
+								div()
+									.id('replace-toggle')
+									.h(30)
+									.px(8)
+									.ml(6)
+									.flex()
+									.items_center()
+									.rounded(8)
+									.cursor_pointer()
+									.text_size(11.5)
+									.text_color(this.replacing ? t.accent : t.dim)
+									.hover((s) => s.bg(t.hover).text_color(t.foreground))
+									.on_click((_e, cx) => {
+										this.replacing = !this.replacing;
+										if (this.replacing) this.repl.focus();
+										cx.notify();
+									})
+									.child('Replace'),
+							),
+						),
+				),
+			)
+			.when(this.searching && this.replacing && !this.on, (el) =>
+				el.child(
+					h_flex()
+						.id('files-replace')
+						.flex_none()
+						.px(10)
+						.pb(8)
+						.gap(6)
+						.border_b(1)
+						.border_color(t.border)
+						.on_key_down((e, cx) => {
+							if (e.key !== 'escape') return;
+							this.toggleSearch(cx);
+							cx.stop_propagation();
+						})
+						.child(
+							Input.new(this.repl)
+								.flex_1()
+								.h(30)
+								.px(9)
+								.rounded(8)
+								.border_1()
+								.border_color(t.input)
+								.bg(t.background)
+								.text_size(12.5)
+								.text_color(t.foreground),
+						)
+						.child(
+							div()
+								.id('replace-all')
+								.h(30)
+								.px(10)
+								.flex()
+								.items_center()
+								.rounded(8)
+								.text_size(11.5)
+								.bg(t.raised)
+								.when(Boolean(this.query), (el) =>
+									el
+										.cursor_pointer()
+										.text_color(t.foreground)
+										.hover((s) => s.bg(t.hover))
+										.on_click(() => this.askReplace()),
+								)
+								.when(!this.query, (el) => el.text_color(t.dim))
+								.child('Replace all'),
 						),
 				),
 			)
@@ -492,7 +695,7 @@ class Files extends View {
 					.min_h(0)
 					.overflow_y_scrollbar()
 					.p(6)
-					.children(this.searching ? this.results(t) : this.rows('', 0, [], t))
+					.children(this.searching ? this.results(t) : this.tree(t))
 					.when(!this.searching && (Boolean(this.error) || !this.entries.get('')?.length), (el) =>
 						el.child(
 							div()
@@ -507,7 +710,40 @@ class Files extends View {
 							div().p(8).text_size(11).text_color(t.dim).child('File list limited to 500 entries per folder and 5,000 total'),
 						),
 					),
-			);
+			)
+			.when(this.sel.size > 1 && !this.searching, (el) => el.child(this.selectionBar(t)));
+	}
+
+	// "3 selected" with what can be done to them, so a selection works without a right-click too.
+	selectionBar(t) {
+		const take = (mode) => () => setShared('files.clipboard', { mode, paths: this.picked().map((i) => i.path), on: this.on });
+		const chip = (id, label, color, action) =>
+			div()
+				.id(`sel-${id}`)
+				.h(24)
+				.px(8)
+				.flex()
+				.items_center()
+				.rounded(6)
+				.cursor_pointer()
+				.text_size(11.5)
+				.text_color(color)
+				.hover((s) => s.bg(t.hover))
+				.on_click(action)
+				.child(label);
+		return h_flex()
+			.flex_none()
+			.h(38)
+			.px(10)
+			.gap(2)
+			.items_center()
+			.border_t(1)
+			.border_color(t.border)
+			.child(div().flex_1().text_size(12).text_color(t.muted).child(`${this.sel.size} selected`))
+			.child(chip('copy', 'Copy', t.foreground, take('copy')))
+			.child(chip('cut', 'Cut', t.foreground, take('cut')))
+			.child(chip('delete', 'Delete', t.blocked, () => this.dialog('delete', { items: this.picked() })))
+			.child(chip('clear', '×', t.dim, (_e, cx) => this.clearSelection(cx)));
 	}
 }
 
@@ -516,7 +752,7 @@ export default class FileTree extends Files {
 	init(given, cx) {
 		// An overlay gets its props through props(), not as init's argument.
 		const p = given?.view ? given : props();
-		const Part = { menu: FileMenu, name: NameDialog, delete: DeleteDialog }[p?.view] ?? null;
+		const Part = { menu: FileMenu, name: NameDialog, delete: DeleteDialog, replace: ReplaceDialog }[p?.view] ?? null;
 		if (!Part) return super.init(p, cx);
 		this.part = new Part();
 		this.part.init(p, cx);

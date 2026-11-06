@@ -10,6 +10,8 @@ const DEFAULTS = {
 	fontSize: 13,
 	lineNumbers: true,
 	folding: true,
+	formatOnSave: true,
+	lintOnSave: true,
 	hidden: true,
 	contentSearch: true,
 	statusGit: true,
@@ -24,6 +26,8 @@ const SECTIONS = [
 			['fontSize', 'Font size', [10, 20]],
 			['lineNumbers', 'Line numbers'],
 			['folding', 'Code folding'],
+			['formatOnSave', 'Format on save (project formatter)'],
+			['lintOnSave', 'Check for problems'],
 		],
 	],
 	[

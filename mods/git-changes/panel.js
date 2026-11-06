@@ -36,6 +36,17 @@ import { History } from './history.js';
 import { generateMessage } from './ai.js';
 import { fileAppearance, statusColor } from './appearance.js';
 
+// A conflicted file opens in its own editor tab, on the Conflicts view (one already open is shown instead).
+function resolveConflicts(file, on) {
+	const name = file.split('/').pop(),
+		open = shared('file-editor') ?? {},
+		tabs = spaces().flatMap((s) => s.tabs ?? []);
+	const there = Object.entries(open).find(([id, e]) => e.path === file && tabs.some((tb) => tb.id === id));
+	if (there) return run('tab.select', { id: there[0] });
+	const title = tabs.some((tb) => tb.name === name || tb.name === `● ${name}`) ? file.split('/').slice(-2).join('/') : name;
+	run('tab.new', { name: title, mod: 'file-editor', props: { file, title, on, mode: 'conflicts' } });
+}
+
 // A mod pane (an editor tab) has no folder, and `space.folder` is only where the space was made. So a space
 // keeps showing the folder of the last terminal that had focus in it, else of its first terminal.
 const lastTerminal = new Map();
@@ -483,6 +494,9 @@ export class Panel {
 					icon: staged ? 'minus' : 'plus',
 					run: (cx) => this.act(cx, staged ? 'Unstage' : 'Stage', G.toggleArgs(e, this.hasHead)),
 				},
+				...(e.conflict
+					? [{ label: 'Resolve conflicts', icon: 'diff', run: () => resolveConflicts(`${this.root}/${e.path}`, this.on ?? null) }]
+					: []),
 				{ label: 'Show diff', icon: 'diff', run: (cx) => this.pick(e, cx) },
 				{ separator: true },
 				{ label: 'Copy path', icon: 'copy', copy: e.path },
