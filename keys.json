@@ -1,0 +1,19 @@
+{
+	"global": {
+		"cmd-alt-,": "mod.open:editor-settings"
+	},
+	"layout:Irfnd-Layout": {
+		"cmd-p": "mod.open:auto-titles-picker",
+		"cmd-o": "auto-titles-tabs.zed",
+		"ctrl-shift-g": "auto-titles-tabs.changes",
+		"cmd-shift-e": "auto-titles-tabs.files",
+		"cmd-shift-s": "auto-titles-tabs.spaces"
+	},
+	"mod:file-editor": {
+		"cmd-s": "file-editor.save",
+		"ctrl-s": "file-editor.save",
+		"cmd-w": "file-editor.close",
+		"ctrl-w": "file-editor.close",
+		"cmd-shift-w": "file-editor.close"
+	}
+}

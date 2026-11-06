@@ -1,0 +1,197 @@
+{
+	"id": "root",
+	"cloned_from": {
+		"name": "auto-titles-main",
+		"version": "0.1.12"
+	},
+	"type": "row",
+	"children": [
+		{
+			"id": "work",
+			"type": "column",
+			"children": [
+				{
+					"id": "tabs",
+					"type": "block",
+					"content": {
+						"mod": "auto-titles-tabs"
+					},
+					"size": {
+						"px": 42
+					},
+					"window_drag": true
+				},
+				{
+					"id": "work-body",
+					"type": "row",
+					"children": [
+						{
+							"id": "main",
+							"type": "block",
+							"content": {
+								"tab": "active",
+								"pane": {
+									"header": {
+										"content": {
+											"mod": "auto-titles-pane"
+										},
+										"reveal": "always",
+										"height": 30,
+										"position": "top"
+									},
+									"background": "background",
+									"border": {
+										"width": 1,
+										"color": "border"
+									},
+									"focus": {
+										"width": 1,
+										"color": "accent"
+									},
+									"radius": 10,
+									"gap": 8,
+									"lone": true
+								}
+							}
+						}
+					],
+					"padding": 8,
+					"gap": 8
+				},
+				{
+					"id": "status",
+					"type": "block",
+					"content": {
+						"mod": "status-bar"
+					},
+					"size": {
+						"px": 28
+					}
+				}
+			],
+			"resizable": false
+		},
+		{
+			"id": "sidebar",
+			"type": "column",
+			"children": [
+				{
+					"id": "brand",
+					"type": "block",
+					"content": {
+						"mod": "auto-titles-workspace-chrome"
+					},
+					"size": {
+						"px": 46
+					},
+					"window_drag": true
+				},
+				{
+					"id": "sidebar-switch",
+					"type": "block",
+					"content": {
+						"mod": "auto-titles-workspace-chrome",
+						"props": {
+							"switcher": true
+						}
+					},
+					"size": {
+						"px": 36
+					}
+				},
+				{
+					"id": "sidebar-body",
+					"type": "stack",
+					"children": [
+						{
+							"id": "spaces-view",
+							"type": "column",
+							"children": [
+								{
+									"id": "spaces",
+									"type": "block",
+									"content": {
+										"mod": "space-avatars"
+									},
+									"size": {
+										"weight": 1
+									},
+									"min": 90
+								},
+								{
+									"id": "agents",
+									"type": "block",
+									"content": {
+										"mod": "auto-titles-agents"
+									},
+									"size": {
+										"weight": 1
+									},
+									"min": 90
+								}
+							]
+						},
+						{
+							"id": "files-view",
+							"type": "column",
+							"children": [
+								{
+									"id": "files-tree",
+									"type": "block",
+									"content": {
+										"mod": "file-changes-colors"
+									}
+								}
+							],
+							"padding": 8
+						},
+						{
+							"id": "changes-view",
+							"type": "column",
+							"children": [
+								{
+									"id": "changes-tree",
+									"type": "block",
+									"content": {
+										"mod": "git-changes"
+									}
+								}
+							],
+							"padding": 8
+						}
+					],
+					"active": "spaces-view"
+				},
+				{
+					"id": "sidebar-footer",
+					"type": "block",
+					"content": {
+						"mod": "auto-titles-workspace-chrome",
+						"props": {
+							"footer": true
+						}
+					},
+					"size": {
+						"px": 41
+					}
+				}
+			],
+			"size": {
+				"px": 268
+			},
+			"min": 44,
+			"max": 480,
+			"background": "chrome",
+			"resizable": false
+		}
+	],
+	"background": "canvas",
+	"terminal_padding": [14, 12],
+	"divider": {
+		"width": 1,
+		"color": "border"
+	},
+	"titlebar": "none",
+	"traffic_lights": [12, 12],
+	"preview": "layouts/Irfnd-Layout.svg"
+}

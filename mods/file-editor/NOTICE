@@ -1,0 +1,2 @@
+file-editor derives its line diff, bar layout and external-change handling from
+abdh-editor in https://github.com/abdh01h/herdr-agentee-theme (Apache-2.0).

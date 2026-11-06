@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#0a0a0a"/>
+
+  <!-- tab bar: window buttons, tab pill, + -->
+  <rect width="238" height="22" fill="#101010"/>
+  <circle cx="9" cy="11" r="2.6" fill="#ff5f57"/><circle cx="17" cy="11" r="2.6" fill="#febc2e"/><circle cx="25" cy="11" r="2.6" fill="#28c840"/>
+  <rect x="36" y="4" width="62" height="14" rx="4" fill="#1c1c1c" stroke="#2a2a2a"/>
+  <rect x="41" y="8" width="6" height="6" rx="1.5" fill="#ffc799"/>
+  <rect x="51" y="9.5" width="34" height="3" rx="1.5" fill="#a0a0a0"/>
+  <path d="M225 8v6M222 11h6" stroke="#505050" stroke-width="1.2" stroke-linecap="round"/>
+  <rect y="22" width="238" height="1" fill="#232323"/>
+
+  <!-- terminal pane card -->
+  <rect x="4" y="27" width="230" height="150" rx="5" fill="#101010" stroke="#ffc799"/>
+  <rect x="5" y="28" width="228" height="14" rx="4" fill="#141414"/>
+  <rect x="11" y="33" width="5" height="5" rx="1.5" fill="#ffc799"/>
+  <rect x="20" y="34" width="52" height="3" rx="1.5" fill="#a0a0a0"/>
+  <rect x="5" y="42" width="228" height="1" fill="#232323"/>
+  <g fill="#505050">
+    <rect x="12" y="52" width="78" height="3" rx="1.5"/>
+    <rect x="12" y="62" width="120" height="3" rx="1.5"/>
+    <rect x="12" y="72" width="96" height="3" rx="1.5"/>
+    <rect x="12" y="92" width="140" height="3" rx="1.5"/>
+    <rect x="12" y="102" width="64" height="3" rx="1.5"/>
+  </g>
+  <rect x="12" y="122" width="26" height="3" rx="1.5" fill="#ffc799"/>
+  <rect x="42" y="122" width="58" height="3" rx="1.5" fill="#a0a0a0"/>
+  <rect x="104" y="120.5" width="4" height="6" fill="#ffc799"/>
+
+  <!-- status bar -->
+  <rect y="182" width="238" height="1" fill="#232323"/>
+  <rect x="8" y="189" width="34" height="3" rx="1.5" fill="#505050"/>
+  <rect x="190" y="189" width="40" height="3" rx="1.5" fill="#505050"/>
+
+  <!-- sidebar (right) -->
+  <rect x="238" width="82" height="200" fill="#101010"/>
+  <rect x="238" width="1" height="200" fill="#232323"/>
+  <!-- header: buttons left, logo right -->
+  <rect x="245" y="7" width="8" height="8" rx="2" fill="none" stroke="#a0a0a0" stroke-width="1"/>
+  <circle cx="264" cy="10.5" r="3" fill="none" stroke="#a0a0a0" stroke-width="1"/><path d="M266.2 12.8l2.3 2.3" stroke="#a0a0a0" stroke-width="1" stroke-linecap="round"/>
+  <rect x="288" y="6" width="9" height="9" rx="2.5" fill="#ffffff"/>
+  <rect x="300" y="9" width="14" height="3" rx="1.5" fill="#d0d0d0"/>
+  <!-- Spaces | Files | Changes tabs, icon + label, equal width -->
+  <rect x="243" y="24" width="24" height="11" rx="3" fill="#232323"/>
+  <rect x="246" y="27.5" width="3.5" height="3.5" rx="1" fill="#ffffff"/>
+  <rect x="251" y="28.5" width="13" height="2.5" rx="1.2" fill="#ffffff"/>
+  <rect x="270" y="27.5" width="3.5" height="3.5" rx="1" fill="#505050"/>
+  <rect x="275" y="28.5" width="11" height="2.5" rx="1.2" fill="#505050"/>
+  <rect x="294" y="27.5" width="3.5" height="3.5" rx="1" fill="#505050"/>
+  <rect x="299" y="28.5" width="13" height="2.5" rx="1.2" fill="#505050"/>
+  <!-- spaces list -->
+  <rect x="245" y="43" width="18" height="2.5" rx="1.2" fill="#505050"/>
+  <path d="M311 42v5M308.5 44.5h5" stroke="#505050" stroke-width="1" stroke-linecap="round"/>
+  <g>
+    <rect x="243" y="52" width="72" height="12" rx="3" fill="#1c1c1c"/>
+    <rect x="247" y="55" width="6" height="6" rx="1.5" fill="#2bb5a0"/><rect x="257" y="57" width="34" height="2.5" rx="1.2" fill="#d0d0d0"/>
+    <rect x="247" y="69" width="6" height="6" rx="1.5" fill="#e8814f"/><rect x="257" y="71" width="40" height="2.5" rx="1.2" fill="#a0a0a0"/>
+    <rect x="247" y="83" width="6" height="6" rx="1.5" fill="#4f7fe8"/><rect x="257" y="85" width="22" height="2.5" rx="1.2" fill="#a0a0a0"/>
+    <rect x="247" y="97" width="6" height="6" rx="1.5" fill="#8b6fe8"/><rect x="257" y="99" width="44" height="2.5" rx="1.2" fill="#a0a0a0"/>
+    <rect x="247" y="111" width="6" height="6" rx="1.5" fill="#3fbf6f"/><rect x="257" y="113" width="12" height="2.5" rx="1.2" fill="#a0a0a0"/>
+  </g>
+  <!-- agents -->
+  <rect x="239" y="140" width="81" height="1" fill="#232323"/>
+  <rect x="245" y="147" width="20" height="2.5" rx="1.2" fill="#505050"/>
+  <rect x="306" y="145" width="6" height="6" rx="1.5" fill="none" stroke="#505050"/>
+  <rect x="245" y="157" width="18" height="2.5" rx="1.2" fill="#ffc799"/>
+  <rect x="243" y="164" width="72" height="12" rx="3" fill="#161616"/>
+  <rect x="247" y="167" width="6" height="6" rx="1.5" fill="#e8814f"/>
+  <rect x="257" y="169" width="38" height="2.5" rx="1.2" fill="#a0a0a0"/>
+  <circle cx="309" cy="170" r="2.5" fill="none" stroke="#ffc799" stroke-width="1" stroke-dasharray="9 5"/>
+  <!-- footer: Settings, right aligned -->
+  <rect x="239" y="184" width="81" height="1" fill="#232323"/>
+  <circle cx="282" cy="192" r="2.6" fill="none" stroke="#a0a0a0" stroke-width="1"/>
+  <rect x="288" y="190.8" width="22" height="2.5" rx="1.2" fill="#a0a0a0"/>
+</svg>
