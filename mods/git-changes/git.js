@@ -271,7 +271,7 @@ export function suggestMessage(entries) {
 
 // --- what the buttons run ---------------------------------------------------
 
-const unstage = (paths, hasHead) =>
+export const unstage = (paths, hasHead) =>
 	hasHead ? ['restore', '--staged', '--', ...paths] : ['rm', '--cached', '-q', '-r', '--', ...paths];
 
 // The checkbox: fully staged unstages, anything else stages the whole file.

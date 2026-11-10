@@ -36,16 +36,17 @@ import { History } from './history.js';
 import { generateMessage } from './ai.js';
 import { fileAppearance, statusColor } from './appearance.js';
 
-// A conflicted file opens in its own editor tab, on the Conflicts view (one already open is shown instead).
-function resolveConflicts(file, on) {
+// A file opens in its own editor tab (`extra` adds editor props, e.g. mode: 'conflicts'); one already open is shown instead.
+function openFile(file, on, extra = {}) {
 	const name = file.split('/').pop(),
 		open = shared('file-editor') ?? {},
 		tabs = spaces().flatMap((s) => s.tabs ?? []);
 	const there = Object.entries(open).find(([id, e]) => e.path === file && tabs.some((tb) => tb.id === id));
 	if (there) return run('tab.select', { id: there[0] });
 	const title = tabs.some((tb) => tb.name === name || tb.name === `● ${name}`) ? file.split('/').slice(-2).join('/') : name;
-	run('tab.new', { name: title, mod: 'file-editor', props: { file, title, on, mode: 'conflicts' } });
+	run('tab.new', { name: title, mod: 'file-editor', props: { file, title, on, ...extra } });
 }
+const resolveConflicts = (file, on) => openFile(file, on, { mode: 'conflicts' });
 
 // A mod pane (an editor tab) has no folder, and `space.folder` is only where the space was made. So a space
 // keeps showing the folder of the last terminal that had focus in it, else of its first terminal.
@@ -85,6 +86,10 @@ export class Panel {
 		this.remotes = [];
 		this.last = null;
 		this.history = new History();
+		this.sel = new Set(); // every selected file (path); cmd/ctrl-click adds, shift-click selects a range
+		this.anchor = null; // where a shift range starts
+		this.cursor = null; // the last row clicked or moved to
+		this.order = []; // paths of the file rows on screen, top to bottom
 		this.panelWidth = 400;
 		this.branch = null;
 		this.listMode = localStorage.getItem('list') === 'flat' ? 'flat' : 'tree';
@@ -199,6 +204,9 @@ export class Panel {
 					.slice(0, G.LIMIT)
 					.map((e) => ({ ...e, area: 'file', add: 0, del: 0, ...(numstat[e.path] ?? {}) }));
 				this.limited = s.entries.length > G.LIMIT;
+				const live = new Set(this.entries.map((e) => e.path));
+				this.sel = new Set([...this.sel].filter((p) => live.has(p)));
+				if (!live.has(this.cursor)) this.cursor = null;
 				this.root = root;
 				this.on = on;
 				this.branch = s.branch;
@@ -233,6 +241,92 @@ export class Panel {
 		this.note = null;
 		showInTab(space.id, item, { root: this.root, on: this.on ?? null });
 		cx.notify();
+	}
+
+	// --- selection and keys -------------------------------------------------------
+
+	// The files an operation acts on.
+	picked() {
+		return this.entries.filter((e) => this.sel.has(e.path));
+	}
+
+	// The file itself, in an editor tab. A deleted file has nothing to open.
+	open(e) {
+		if (this.root && e.status !== 'D' && !e.path.endsWith('/')) openFile(`${this.root}/${e.path}`, this.on ?? null);
+	}
+
+	// A click on a file row. Plain: select it and show its diff (a double-click opens the file).
+	// Cmd/Ctrl: add or remove it. Shift: everything from the last plain or cmd click down to it. Those two only select.
+	click(e, mod, clicks, cx) {
+		this.handle.focus();
+		this.armed = null;
+		const at = this.order.indexOf(e.path),
+			from = this.order.indexOf(this.anchor);
+		if (mod.shift && at >= 0 && from >= 0) {
+			this.sel = new Set(this.order.slice(Math.min(at, from), Math.max(at, from) + 1));
+			this.cursor = e.path;
+		} else if (mod.platform || mod.control) {
+			if (!this.sel.size && this.cursor) this.sel.add(this.cursor);
+			if (this.sel.has(e.path)) this.sel.delete(e.path);
+			else this.sel.add(e.path);
+			this.cursor = this.anchor = e.path;
+		} else {
+			this.sel = new Set([e.path]);
+			this.cursor = this.anchor = e.path;
+			if (clicks > 1) this.open(e);
+			else this.pick(e, cx);
+		}
+		cx.notify();
+	}
+
+	// ↑/↓: move to the next file and show its diff. With shift: grow the selection instead.
+	move(step, extend, cx) {
+		const n = this.order.length;
+		if (!n) return;
+		const at = this.order.indexOf(this.cursor);
+		const to = this.order[at < 0 ? (step > 0 ? 0 : n - 1) : Math.max(0, Math.min(n - 1, at + step))];
+		if (extend) {
+			const a = this.order.indexOf(this.anchor ?? this.cursor ?? to),
+				b = this.order.indexOf(to);
+			this.sel = new Set(this.order.slice(Math.min(a, b), Math.max(a, b) + 1));
+			this.cursor = to;
+		} else {
+			this.sel = new Set([to]);
+			this.cursor = this.anchor = to;
+			const e = this.entries.find((x) => x.path === to);
+			if (e) this.pick(e, cx);
+		}
+		this.armed = null;
+		cx.notify();
+	}
+
+	discard(list, cx) {
+		this.act(
+			cx,
+			'Discard',
+			list.flatMap((e) => G.discardArgs(e, this.hasHead)),
+		);
+	}
+
+	// Keys on the list, never while typing a message. True when the key was used.
+	keys(e, cx) {
+		const k = e.keystroke,
+			list = this.picked();
+		if (k === 'up' || k === 'down' || k === 'shift-up' || k === 'shift-down') this.move(k.endsWith('up') ? -1 : 1, k.startsWith('shift'), cx);
+		else if (k === 'cmd-a' || k === 'ctrl-a') {
+			this.sel = new Set(this.order);
+			cx.notify();
+		} else if (k === 'escape' && this.sel.size > 1) {
+			this.sel = new Set(this.cursor ? [this.cursor] : []);
+			cx.notify();
+		} else if (!list.length) return false;
+		else if (k === 'space') this.toggleSection(list, cx);
+		else if (k === 'enter') list.slice(0, 10).forEach((f) => this.open(f));
+		// Delete asks once more: press it again (or click Sure?) within 3 seconds.
+		else if (k === 'delete' || k === 'cmd-backspace')
+			this.arm(list.length > 1 ? 'discard-sel' : `discard-${list[0].path}`, cx, () => this.discard(list, cx));
+		else return false;
+		return true;
 	}
 
 	setTab(tab, cx) {
@@ -485,7 +579,33 @@ export class Panel {
 			});
 	}
 
+	// Right-click on several selected files: the actions that make sense for all of them.
+	multiMenu(list, cx) {
+		const n = list.length,
+			staged = list.every((f) => f.staged === 'all'),
+			paths = list.map((f) => f.path);
+		this.menu(
+			[
+				{
+					label: `${staged ? 'Unstage' : 'Stage'} ${n} files`,
+					icon: staged ? 'minus' : 'plus',
+					run: (cx) => this.toggleSection(list, cx),
+				},
+				{ label: `Open ${Math.min(n, 10)} files`, icon: 'file', run: () => list.slice(0, 10).forEach((f) => this.open(f)) },
+				{ separator: true },
+				{ label: 'Copy paths', icon: 'copy', copy: paths.join('\n') },
+				{ label: 'Copy full paths', icon: 'copy', copy: paths.map((p) => `${this.root}/${p}`).join('\n') },
+				{ separator: true },
+				{ label: `Discard ${n} files`, icon: 'undo', danger: true, run: (cx) => this.discard(list, cx) },
+			],
+			cx,
+		);
+	}
+
 	fileMenu(e, cx) {
+		if (this.sel.size > 1 && this.sel.has(e.path)) return this.multiMenu(this.picked(), cx);
+		this.sel = new Set([e.path]);
+		this.cursor = this.anchor = e.path;
 		const staged = e.staged === 'all';
 		this.menu(
 			[
@@ -497,6 +617,7 @@ export class Panel {
 				...(e.conflict
 					? [{ label: 'Resolve conflicts', icon: 'diff', run: () => resolveConflicts(`${this.root}/${e.path}`, this.on ?? null) }]
 					: []),
+				{ label: 'Open file', icon: 'file', hint: '↵', disabled: e.status === 'D', run: () => this.open(e) },
 				{ label: 'Show diff', icon: 'diff', run: (cx) => this.pick(e, cx) },
 				{ separator: true },
 				{ label: 'Copy path', icon: 'copy', copy: e.path },
@@ -1017,7 +1138,9 @@ export class Panel {
 		const hovered = this.hovered === id || this.armed === `discard-${id}`;
 		const status = e.conflict ? 'U' : e.status === 'D' ? 'D' : e.untracked || e.status === 'A' ? 'A' : 'M';
 		const color = statusColor(status, t);
-		const selected = this.isShown(e);
+		const selected = this.isShown(e),
+			chosen = this.sel.has(e.path);
+		this.order.push(e.path);
 		return h_flex()
 			.id(`row-${id}`)
 			.h(ROW)
@@ -1030,7 +1153,7 @@ export class Panel {
 			.cursor_pointer()
 			.border_1()
 			.border_color(selected ? t.accent : t.background + '00')
-			.when(selected, (el) => el.bg(t.selected))
+			.when(selected || chosen, (el) => el.bg(t.selected))
 			.hover((s) => s.bg(t.hover))
 			.tooltip(e.path)
 			.on_hover((h, cx) => {
@@ -1038,7 +1161,11 @@ export class Panel {
 				else if (this.hovered === id) this.hovered = null;
 				cx.notify();
 			})
-			.on_click((_ev, cx) => this.pick(e, cx))
+			// A row click doesn't carry the click count: the press does.
+			.on_mouse_down('left', (ev) => {
+				this.clicks = ev.click_count;
+			})
+			.on_click((ev, cx) => this.click(e, ev.modifiers ?? {}, this.clicks ?? 1, cx))
 			.on_mouse_down('right', (_ev, cx) => {
 				cx.stop_propagation();
 				this.fileMenu(e, cx);
@@ -1228,6 +1355,7 @@ export class Panel {
 	}
 
 	changesList(t) {
+		this.order = [];
 		const out = [],
 			conflicts = [],
 			tracked = [],
@@ -1263,6 +1391,46 @@ export class Panel {
 			);
 		}
 		return { out };
+	}
+
+	selectionBar(t) {
+		const list = this.picked(),
+			staged = list.every((f) => f.staged === 'all');
+		const chip = (id, label, color, action) =>
+			div()
+				.id(`sel-${id}`)
+				.h(24)
+				.px(8)
+				.flex()
+				.items_center()
+				.rounded(6)
+				.cursor_pointer()
+				.text_size(11.5)
+				.text_color(color)
+				.hover((s) => s.bg(t.hover))
+				.on_click((_e, cx) => action(cx))
+				.child(label);
+		return h_flex()
+			.flex_none()
+			.h(36)
+			.px(10)
+			.gap(2)
+			.items_center()
+			.border_t(1)
+			.border_color(t.border)
+			.child(div().flex_1().text_size(12).text_color(t.muted).child(`${list.length} selected`))
+			.child(chip('stage', staged ? 'Unstage' : 'Stage', t.foreground, (cx) => this.toggleSection(list, cx)))
+			.child(
+				chip('discard', this.armed === 'discard-sel' ? 'Sure?' : 'Discard', t.ansi1, (cx) =>
+					this.arm('discard-sel', cx, () => this.discard(list, cx)),
+				),
+			)
+			.child(
+				chip('clear', '×', t.dim, (cx) => {
+					this.sel = new Set(this.cursor ? [this.cursor] : []);
+					cx.notify();
+				}),
+			);
 	}
 
 	tabs(t) {
@@ -1745,6 +1913,8 @@ export class Panel {
 				else if ((e.keystroke === 'cmd-c' || e.keystroke === 'ctrl-shift-c') && !this.typing && this.shown()?.area === 'commit') {
 					this.copyHash(this.shown(), cx);
 					cx.stop_propagation();
+				} else if (!this.typing && this.tab === 'changes' && this.keys(e, cx)) {
+					cx.stop_propagation();
 				} else if (e.key === 'escape' && this.typing) {
 					this.typing = false;
 					this.handle.focus();
@@ -1774,6 +1944,7 @@ export class Panel {
 						),
 				),
 			)
+			.when(!history && this.sel.size > 1, (e) => e.child(this.selectionBar(t)))
 			.when(this.limited, (e) =>
 				e.child(div().px(12).py(4).text_size(11).text_color(t.dim).child(`Showing the first ${G.LIMIT.toLocaleString()} files`)),
 			)

@@ -19,6 +19,7 @@ import { v_flex, h_flex, Scrollbar, v_virtual_list } from 'gpui-base';
 import { exec, readTextFile, watchFolder, theme, settings, props, shared, setShared, spaces, panes, run } from 'herdr';
 import * as G from './git.js';
 import { icon } from './menu.js';
+import { highlight, langOf } from './highlight.js';
 
 const MAX = 5000;
 const clip = (line) => (line.length > 4000 ? line.slice(0, 4000) + '… (line truncated)' : line);
@@ -214,6 +215,12 @@ export class DiffView {
 				const lines = await loadDiff(item, { root, on, hasHead: head.code === 0, untracked });
 				if (seen !== this.seen) return;
 				this.rows = G.diffRows(lines, { headers: item.area !== 'file' });
+				// Each row remembers its file's type (a diff of many files switches at every file header).
+				let lang = item.area === 'file' ? langOf(item.path) : null;
+				for (const r of this.rows) {
+					if (r.kind === 'f') lang = langOf(r.text);
+					r.lang = lang;
+				}
 				this.pairs = null;
 				this.width = Math.max(300, ...this.rows.map((r) => r.text.length * 7 + 20));
 				this.error = null;
@@ -326,7 +333,17 @@ export class DiffView {
 			);
 	}
 
-	unifiedRow({ kind, old, number, text }, t) {
+	// A line of code, in the colours of the editor's syntax theme when the file type is known.
+	code(text, lang, base, t) {
+		const parts = lang && highlight(text, lang);
+		if (!parts) return div().whitespace_nowrap().text_color(base).child(text);
+		const hue = { kw: t.ansi5, str: t.ansi2, com: t.dim, fn: t.ansi4, type: t.ansi3, num: t.ansi1, const: t.ansi6, bool: t.ansi3 };
+		return h_flex()
+			.whitespace_nowrap()
+			.children(parts.map(([s, k]) => div().flex_none().text_color(hue[k] ?? t.foreground).child(s)));
+	}
+
+	unifiedRow({ kind, old, number, text, lang }, t) {
 		if (kind === 'f')
 			return div()
 				.w_full()
@@ -373,14 +390,7 @@ export class DiffView {
 					.text_color(color)
 					.child(kind === '+' || kind === '-' ? kind : ''),
 			)
-			.child(
-				div()
-					.flex_1()
-					.min_w(0)
-					.whitespace_nowrap()
-					.text_color(kind === ' ' ? t.foreground : color)
-					.child(text),
-			);
+			.child(div().flex_1().min_w(0).child(this.code(text, lang, kind === ' ' ? t.foreground : color, t)));
 	}
 
 	// One row of both columns. Both sides move by the same horizontal offset, so they stay lined up.
@@ -411,9 +421,7 @@ export class DiffView {
 								.w(this.width)
 								.flex_none()
 								.ml(-this.offset)
-								.whitespace_nowrap()
-								.text_color(kind === ' ' ? t.foreground : color)
-								.child(entry?.text ?? ''),
+								.child(this.code(entry?.text ?? '', entry?.lang, kind === ' ' ? t.foreground : color, t)),
 						),
 				);
 		};

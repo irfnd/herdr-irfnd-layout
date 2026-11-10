@@ -105,10 +105,25 @@ Changes; the body (one of three views); a 41 px footer with a Settings button.
 - **Split**: the `Split` button opens the same file in a second editor to the right. Only the first
   editor reports to the tab title and the status bar and answers ⌘W; the second has no Split
   button and closes with its pane's own close button.
-- **Changes**: tick files to stage; clicking a file opens its diff in a main-area tab; commit,
-  stash, push, pull. The branch picker switches branches and offers New, Rename, Merge, Abort merge
+- **Changes**: tick files to stage; clicking a file opens its diff in a main-area tab (a
+  double-click opens the file in an editor tab); commit, stash, push, pull. The branch picker switches branches and offers New, Rename, Merge, Abort merge
   (only while merging), Check out remote branch, Delete, Force delete, Delete remote branch.
   History is a coloured commit graph.
+- **Changes selection**: ⌘/Ctrl-click adds or removes a file, Shift-click selects the range from the
+  last plain or ⌘ click; those two only select. Two or more selected files show a bar at the
+  bottom (`N selected`, Stage or Unstage, Discard that asks `Sure?`, ×) and the right-click menu
+  becomes `Stage N files`, `Open N files` (at most 10), `Copy paths`, `Copy full paths`,
+  `Discard N files`. A single file's menu gains `Open file`. Keys while the panel has focus and the
+  commit box does not: ↑/↓ move to the next file and show its diff, ⇧↑/⇧↓ extend the selection,
+  Space stages or unstages the selection, ⌘A selects all, Esc keeps one, Enter opens the selected
+  files in editor tabs, Delete (or ⌘⌫) discards after a second press within 3 seconds. ↑/↓ do not
+  scroll a row into view (the list has no scroll API).
+- **Diff colours**: the diff tab colours code by file type with the editor's syntax palette
+  (JS/TS, Python, Go, Rust, Java/Kotlin/C#/Swift/PHP, C/C++, Ruby, shell, SQL, JSON, YAML, TOML,
+  CSS, HTML/XML, Markdown, Dockerfile, Makefile); other types keep plain green/red text. It is
+  `highlight.js`, a line-by-line tokenizer, so a block comment or template string that spans lines
+  is only coloured where a line shows its start (or a leading `*`); lines over 800 characters stay
+  plain. Many-file diffs switch language at each file header.
 - **Sidebar and status bar follow the space, not the editor tab.** An editor tab has no folder, so
   each space keeps the folder of its last focused terminal.
 - **Keys** (merge `keys.json`): ⌘P go to a tab, ⌘O open the folder in Zed, ⌃⇧G / ⌘⇧E / ⌘⇧S show
@@ -154,7 +169,7 @@ Mods (all in `mods/`, each `place: "none"`; clones record `cloned_from`):
 | `space-avatars` | spaces list, avatars/icons, groups, the space menu and dialogs (props `view`) |
 | `status-bar` | bottom bar; reads shared `file-editor` for the open file's stats, problems and `editor.settings` |
 | `file-changes-colors` | Files tree and selection, file operations (`ops.js`), search (`search.js`) and replace (`replace.js`), its menus and dialogs (`panels.js`: menu, name, delete, replace; props `view`); opens editor tabs with `tab.new {mod: "file-editor", props: {file, title}}` |
-| `git-changes` | Changes panel, menus, diff tab, history graph, `ai.js` commit-message generator; props `role` picks panel / menu / diff; its file menu opens `file-editor` with `mode: "conflicts"` |
+| `git-changes` | Changes panel and its selection and keys, menus, diff tab with `highlight.js` syntax colours, history graph, `ai.js` commit-message generator; props `role` picks panel / menu / diff; its file menu opens `file-editor` with `mode: "conflicts"` |
 | `file-editor` | editor tab, props `{file, title, on?, mode?: "conflicts", split?}`; `ask.js` is its floating dialog, `recovery.js` keeps unsaved text, `diff.js` the line diff, `lint.js` checkers and formatters, `conflicts.js` the conflict parser and view; key commands `save`, `diff`, `blame`, `close`, `problems` |
 | `editor-settings` | settings dialog; state in shared `editor.settings` |
 | `herdr-open-with-zed` | only `zed.svg`, used by the `+` menu |
@@ -253,3 +268,8 @@ project or machine has them, `node_modules/.bin/eslint`, `node_modules/.bin/pret
     twice side by side with a single `Split` button.
 19. A window with a `demo` space shows what `preview.png` shows: Files in the sidebar, an editor
     tab on `src/app.js`, `M 1  A 1` in the status bar.
+20. ⌘-click `a.py` and `z.txt` in Changes: the bar shows `2 selected`; Space ticks both and
+    `git status` shows `M ` for them; ↓ moves to the next row and shows its diff; Delete on an
+    untracked file turns the row's button into `Sure?` and a second Delete removes the file.
+21. Pick a `.ts`, `.json` and `.py` file in Changes: keywords, strings, numbers and comments are
+    coloured; `All changes` colours each file by its own type and leaves a `.txt` plain.
