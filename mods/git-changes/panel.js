@@ -13,7 +13,7 @@
 // refresh are still its. Listens to herdr-git-graph's "git-graph.changed" so
 // both panels refresh after either acts.
 import { div, svg, image } from 'gpui-kit';
-import { v_flex, h_flex, TextareaState, Textarea } from 'gpui-base';
+import { v_flex, h_flex, TextareaState, Textarea, InputState, Input } from 'gpui-base';
 import {
 	spaces,
 	panes,
@@ -117,6 +117,22 @@ export class Panel {
 			cx.notify();
 		});
 		this.editor.on('blur', (_e, cx) => {
+			this.typing = false;
+			cx.notify();
+		});
+		// The filter above the list: files whose path holds the text (any case). While it has focus, keys are its own.
+		this.filter = '';
+		this.filtering = false;
+		this.finder = InputState.new({ placeholder: 'Filter changes' });
+		this.finder.on('change', (_e, cx) => {
+			this.filter = this.finder.value().trim().toLowerCase();
+			cx.notify();
+		});
+		this.finder.on('focus', (_e, cx) => {
+			this.typing = true;
+			cx.notify();
+		});
+		this.finder.on('blur', (_e, cx) => {
 			this.typing = false;
 			cx.notify();
 		});
@@ -245,9 +261,25 @@ export class Panel {
 
 	// --- selection and keys -------------------------------------------------------
 
-	// The files an operation acts on.
+	// Whether the filter lets a file through.
+	match(e) {
+		return !this.filter || e.path.toLowerCase().includes(this.filter);
+	}
+
+	toggleFilter(cx) {
+		this.filtering = !this.filtering;
+		this.filter = '';
+		this.finder.set_value('');
+		if (this.filtering) {
+			this.finder.focus();
+			cx.timer.after(300, () => this.finder.focus());
+		} else this.handle.focus();
+		cx.notify();
+	}
+
+	// The files an operation acts on: the selected ones the filter shows.
 	picked() {
-		return this.entries.filter((e) => this.sel.has(e.path));
+		return this.entries.filter((e) => this.sel.has(e.path) && this.match(e));
 	}
 
 	// The file itself, in an editor tab. A deleted file has nothing to open.
@@ -313,6 +345,7 @@ export class Panel {
 		const k = e.keystroke,
 			list = this.picked();
 		if (k === 'up' || k === 'down' || k === 'shift-up' || k === 'shift-down') this.move(k.endsWith('up') ? -1 : 1, k.startsWith('shift'), cx);
+		else if (k === 'cmd-f' || k === 'ctrl-f') this.toggleFilter(cx);
 		else if (k === 'cmd-a' || k === 'ctrl-a') {
 			this.sel = new Set(this.order);
 			cx.notify();
@@ -1360,12 +1393,13 @@ export class Panel {
 			conflicts = [],
 			tracked = [],
 			untracked = [];
-		for (const e of this.entries) (e.conflict ? conflicts : e.untracked ? untracked : tracked).push(e);
+		const shown = this.entries.filter((e) => this.match(e));
+		for (const e of shown) (e.conflict ? conflicts : e.untracked ? untracked : tracked).push(e);
 		for (const [area, title, list] of [
 			['conflict', 'Conflicts', conflicts],
 			['tracked', 'Tracked', tracked],
 			['untracked', 'Untracked', untracked],
-			['stash', 'Stashes', this.stashes],
+			['stash', 'Stashes', this.filter ? [] : this.stashes],
 		]) {
 			if (!list.length) continue;
 			out.push(this.sectionHeader(area, title, list, t));
@@ -1390,7 +1424,36 @@ export class Panel {
 					),
 			);
 		}
+		else if (!shown.length)
+			out.unshift(div().py(18).text_center().text_color(t.dim).child(`No changed file matches "${this.filter}"`));
 		return { out };
+	}
+
+	filterRow(t) {
+		return h_flex()
+			.id('changes-filter')
+			.flex_none()
+			.px(8)
+			.py(6)
+			.border_b(1)
+			.border_color(t.border)
+			.on_key_down((e, cx) => {
+				if (e.key !== 'escape') return;
+				this.toggleFilter(cx);
+				cx.stop_propagation();
+			})
+			.child(
+				Input.new(this.finder)
+					.flex_1()
+					.h(28)
+					.px(9)
+					.rounded(7)
+					.border_1()
+					.border_color(t.accent)
+					.bg(t.background)
+					.text_size(12)
+					.text_color(t.foreground),
+			);
 	}
 
 	selectionBar(t) {
@@ -1579,6 +1642,7 @@ export class Panel {
 					t,
 				),
 			)
+			.child(this.iconButton('filter', 'search', 'Filter files (⌘F)', (cx) => this.toggleFilter(cx), t, { active: this.filtering }))
 			.child(this.iconButton('options', 'sliders', 'More', (cx) => this.optionsMenu(cx), t))
 			.child(
 				this.iconButton(
@@ -1924,6 +1988,7 @@ export class Panel {
 			})
 			.child(this.tabs(t))
 			.when(Boolean(this.root), (e) => e.child(this.toolbar(t)))
+			.when(Boolean(this.root) && !history && this.filtering, (e) => e.child(this.filterRow(t)))
 			.when(history, (e) => e.child(v_flex().flex_1().min_h(0).child(graph)))
 			.when(!history, (e) =>
 				e.child(
@@ -1944,7 +2009,7 @@ export class Panel {
 						),
 				),
 			)
-			.when(!history && this.sel.size > 1, (e) => e.child(this.selectionBar(t)))
+			.when(!history && this.picked().length > 1, (e) => e.child(this.selectionBar(t)))
 			.when(this.limited, (e) =>
 				e.child(div().px(12).py(4).text_size(11).text_color(t.dim).child(`Showing the first ${G.LIMIT.toLocaleString()} files`)),
 			)

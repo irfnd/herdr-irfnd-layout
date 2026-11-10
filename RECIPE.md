@@ -118,9 +118,13 @@ Changes; the body (one of three views); a 41 px footer with a Settings button.
   Space stages or unstages the selection, ⌘A selects all, Esc keeps one, Enter opens the selected
   files in editor tabs, Delete (or ⌘⌫) discards after a second press within 3 seconds. ↑/↓ do not
   scroll a row into view (the list has no scroll API).
+- **Changes filter**: the search button in the toolbar (or ⌘F with the panel focused) opens a field
+  above the list; files whose path contains the text (any case) stay, stashes hide, and Stage,
+  Discard, ⌘A and the selection bar only see the files that show. Esc closes it and clears it.
 - **Diff tab**: one per space, reused for every pick. The diff view claims its tab id into shared
   `git-changes.view` (retried every second, because the new pane may not be listed on its first
-  render); the tab strip and pane header read it to show the icon and name.
+  render); the tab strip and pane header read it to show the icon and name. The icon and name appear in those
+  two places only; the diff's own header row is just the path (like the editor's path row).
 - **Diff colours**: the diff tab colours code by file type with the editor's syntax palette
   (JS/TS, Python, Go, Rust, Java/Kotlin/C#/Swift/PHP, C/C++, Ruby, shell, SQL, JSON, YAML, TOML,
   CSS, HTML/XML, Markdown, Dockerfile, Makefile); other types keep plain green/red text. It is
@@ -279,3 +283,5 @@ project or machine has them, `node_modules/.bin/eslint`, `node_modules/.bin/pret
 22. A diff opened from Changes looks like an opened file: its tab and its pane header show the
     file's icon and name (`app.ts`), and `All changes` shows the diff icon. Picking another file
     renames that same tab instead of opening a second one.
+23. In Changes, ⌘F opens `Filter changes`; typing `ts` leaves only paths containing `ts`, ⌘A then
+    says `2 selected` for two visible files even when more are changed, and Esc restores the list.
