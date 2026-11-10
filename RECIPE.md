@@ -118,6 +118,9 @@ Changes; the body (one of three views); a 41 px footer with a Settings button.
   Space stages or unstages the selection, ⌘A selects all, Esc keeps one, Enter opens the selected
   files in editor tabs, Delete (or ⌘⌫) discards after a second press within 3 seconds. ↑/↓ do not
   scroll a row into view (the list has no scroll API).
+- **Diff tab**: one per space, reused for every pick. The diff view claims its tab id into shared
+  `git-changes.view` (retried every second, because the new pane may not be listed on its first
+  render); the tab strip and pane header read it to show the icon and name.
 - **Diff colours**: the diff tab colours code by file type with the editor's syntax palette
   (JS/TS, Python, Go, Rust, Java/Kotlin/C#/Swift/PHP, C/C++, Ruby, shell, SQL, JSON, YAML, TOML,
   CSS, HTML/XML, Markdown, Dockerfile, Makefile); other types keep plain green/red text. It is
@@ -161,8 +164,8 @@ Mods (all in `mods/`, each `place: "none"`; clones record `cloned_from`):
 
 | Mod | Role |
 |---|---|
-| `auto-titles-tabs` | tab strip (an editor tab's icon comes from `appearance.js`, a copy of the Files mapping, and the SVGs in `mods/file-changes-colors/icons/`, so that mod must be installed; the path is read from shared `file-editor`); key commands `zed`, `spaces`, `files`, `changes`; every 3 s reads recent terminal text with `hc read` for the `• command` label (shared `auto-titles.cmd`) |
-| `auto-titles-pane` | pane header (an editor pane's icon comes from its own copy of `appearance.js` and `mods/file-changes-colors/icons/`; a split editor shows its tab's file, since a pane can't tell which file it holds; the same file gives the header its title); its close button asks the editor first (`file-editor.request`) when text is unsaved |
+| `auto-titles-tabs` | tab strip (an editor tab's icon comes from `appearance.js`, a copy of the Files mapping, and the SVGs in `mods/file-changes-colors/icons/`, so that mod must be installed; the path is read from shared `file-editor`; a Changes diff tab gets the same icon, or the git icons of `mods/git-changes/icons/` for All changes, a stash or a commit, found through the tab id in shared `git-changes.view`); key commands `zed`, `spaces`, `files`, `changes`; every 3 s reads recent terminal text with `hc read` for the `• command` label (shared `auto-titles.cmd`) |
+| `auto-titles-pane` | pane header (an editor pane's icon comes from its own copy of `appearance.js` and `mods/file-changes-colors/icons/`; a split editor shows its tab's file, since a pane can't tell which file it holds; the same file gives the header its title; a Changes diff pane shows the file's icon and name, or `All changes`, the stash ref or the short hash); its close button asks the editor first (`file-editor.request`) when text is unsaved |
 | `auto-titles-workspace-chrome` | brand row, Spaces/Files/Changes switcher, footer; one mod, props pick the part |
 | `auto-titles-agents` | agents list; opens `auto-titles-peek` |
 | `auto-titles-menu`, `auto-titles-new-menu`, `auto-titles-peek`, `auto-titles-picker` | context menus, the `+` menu, the peek bar, ⌘P go-to-tab; menus open the shipped `worktree` dialog |
@@ -273,3 +276,6 @@ project or machine has them, `node_modules/.bin/eslint`, `node_modules/.bin/pret
     untracked file turns the row's button into `Sure?` and a second Delete removes the file.
 21. Pick a `.ts`, `.json` and `.py` file in Changes: keywords, strings, numbers and comments are
     coloured; `All changes` colours each file by its own type and leaves a `.txt` plain.
+22. A diff opened from Changes looks like an opened file: its tab and its pane header show the
+    file's icon and name (`app.ts`), and `All changes` shows the diff icon. Picking another file
+    renames that same tab instead of opening a second one.

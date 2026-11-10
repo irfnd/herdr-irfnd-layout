@@ -1,5 +1,9 @@
 import { tabTitle, titleSnapshot } from './titles.js';
 import { fileAppearance } from './appearance.js';
+// A Changes diff tab: what it shows (a file, all changes, a stash or a commit). The panel records the tab's id
+// in shared "git-changes.view", one entry per space.
+const diffOf = (tab) => Object.values(shared('git-changes.view') ?? {}).find((e) => e.tab === tab)?.item ?? null;
+const DIFF_ICON = { all: 'diff', stash: 'stash', commit: 'commit' };
 import { View, div, svg, image } from 'gpui-kit';
 import { h_flex } from 'gpui-base';
 import {
@@ -218,7 +222,11 @@ export default class Tabs extends View {
 			const name = tabTitle(c, panes(), shared('auto-titles.cmd'));
 			// An editor tab shows its file's icon, the one the Files tab uses. (A stale entry of a tab that
 			// is no longer an editor must not count, so the tab has to hold a file-editor pane.)
-			const file = panes().some((p) => p.tab === c.id && p.mod === 'file-editor') ? shared('file-editor')?.[c.id]?.path : null;
+			let file = panes().some((p) => p.tab === c.id && p.mod === 'file-editor') ? shared('file-editor')?.[c.id]?.path : null;
+			// A Changes diff tab looks the same: its file's icon, or a git icon for all changes, a stash, a commit.
+			const diff = panes().some((p) => p.tab === c.id && p.mod === 'git-changes') ? diffOf(c.id) : null;
+			if (diff?.area === 'file') file = diff.path;
+			const git = diff && diff.area !== 'file' ? DIFF_ICON[diff.area] : null;
 			return h_flex()
 				.id(`tab-${c.id}`)
 				.h(29)
@@ -260,7 +268,8 @@ export default class Tabs extends View {
 							.flex_none(),
 					),
 				)
-				.when(!file && Boolean(program?.icon), (el) =>
+				.when(Boolean(git), (el) => el.child(svg(`mods/git-changes/icons/${git}.svg`).size(14).flex_none().text_color(t.muted)))
+				.when(!file && !git && Boolean(program?.icon), (el) =>
 					el.child(program.tint ? svg(program.icon).size(14).text_color(t.muted) : image(program.icon).size(14)),
 				)
 				.child(

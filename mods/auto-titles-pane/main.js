@@ -6,6 +6,10 @@
 
 import { paneTitle } from './titles.js';
 import { fileAppearance } from './appearance.js';
+// A Changes diff tab: what it shows (a file, all changes, a stash or a commit). The panel records the tab's id
+// in shared "git-changes.view", one entry per space.
+const diffOf = (tab) => Object.values(shared('git-changes.view') ?? {}).find((e) => e.tab === tab)?.item ?? null;
+const DIFF_ICON = { all: 'diff', stash: 'stash', commit: 'commit' };
 import { View, div, svg, image } from 'gpui-kit';
 import { h_flex } from 'gpui-base';
 import { panes, props, run, theme, home, shared, setShared } from 'herdr';
@@ -53,14 +57,27 @@ export default class Pane extends View {
 		if (!p) return div();
 		// An editor pane shows its file's name and icon (the Files tab's). The file is the one its tab reports:
 		// a split editor has no way to say which file it holds, so it shows the tab's.
-		const file = p.mod === 'file-editor' ? shared('file-editor')?.[p.tab]?.path : null;
-		const name = file ? file.split('/').pop() : paneTitle(p, shared('auto-titles.cmd'));
+		// A Changes diff pane shows what it shows: the file's name and icon, or All changes / the stash / the commit.
+		const diff = p.mod === 'git-changes' ? diffOf(p.tab) : null;
+		let file = p.mod === 'file-editor' ? shared('file-editor')?.[p.tab]?.path : null;
+		if (diff?.area === 'file') file = diff.path;
+		const name = file
+			? file.split('/').pop()
+			: diff
+				? diff.area === 'stash'
+					? diff.ref
+					: diff.area === 'commit'
+						? diff.short
+						: 'All changes'
+				: paneTitle(p, shared('auto-titles.cmd'));
 		const pic = file
 			? image(`mods/file-changes-colors/icons/${fileAppearance(file).icon}.svg`)
 					.w(14)
 					.h(14)
 					.flex_none()
-			: icon(p.program, 14, t.dim);
+			: diff
+				? svg(`mods/git-changes/icons/${DIFF_ICON[diff.area] ?? 'diff'}.svg`).size(14).flex_none().text_color(t.dim)
+				: icon(p.program, 14, t.dim);
 		const st = p.status;
 		const pane = p.pane;
 		return h_flex()

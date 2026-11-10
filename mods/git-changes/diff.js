@@ -14,12 +14,13 @@
 // better-changes by Tawsif Aqib (https://github.com/munza/herdr-mods, Apache-2.0):
 // replacements pair by position inside one block, never across a hunk or a
 // context line. That code isn't used here; git.js has its own splitRows().
-import { div, svg } from 'gpui-kit';
+import { div, svg, image } from 'gpui-kit';
 import { v_flex, h_flex, Scrollbar, v_virtual_list } from 'gpui-base';
 import { exec, readTextFile, watchFolder, theme, settings, props, shared, setShared, spaces, panes, run } from 'herdr';
 import * as G from './git.js';
 import { icon } from './menu.js';
 import { highlight, langOf } from './highlight.js';
+import { fileAppearance } from './appearance.js';
 
 const MAX = 5000;
 const clip = (line) => (line.length > 4000 ? line.slice(0, 4000) + '… (line truncated)' : line);
@@ -135,6 +136,8 @@ export class DiffView {
 		this.sync(cx);
 		// Picks arrive through shared state, which re-renders this copy; files change under it.
 		cx.timer.every(10000, (cx) => this.reload(cx));
+		// The pane may not be listed yet when the tab first renders, so claiming is retried until it works.
+		cx.timer.every(1000, () => this.claim());
 	}
 
 	entry() {
@@ -286,10 +289,14 @@ export class DiffView {
 					.gap(8)
 					.items_center()
 					.child(
-						svg(icon(this.item.area === 'commit' ? 'commit' : this.item.area === 'stash' ? 'stash' : 'file'))
-							.size(14)
-							.flex_none()
-							.text_color(t.muted),
+						this.item.area === 'file'
+							? image(`mods/git-changes/file-icons/${fileAppearance(itemName(this.item)).icon}.svg`)
+									.size(16)
+									.flex_none()
+							: svg(icon(this.item.area === 'commit' ? 'commit' : this.item.area === 'stash' ? 'stash' : 'diff'))
+									.size(14)
+									.flex_none()
+									.text_color(t.muted),
 					)
 					.child(
 						div()
